@@ -1,8 +1,14 @@
+<p align="center">
+  <img src="assets/logo.jpg" alt="Domovoy logo" width="320"/>
+</p>
+
 # Domovoy
 
 > A cross-platform, lightweight C++20 framework for **production observability** — gathering memory leaks, heap corruption, CPU hotspots, IO leaks, and crash context with minimal overhead.
 
 Domovoy is designed to be embedded in shipped software so that you can gather high-quality diagnostics from production crashes and slow sessions, in a way that is **safe, isolated from application heap corruption, and fully opt-in**.
+
+> **Name & mythology:** In Slavic folklore the *Domovoy* (домово́й) is the protective spirit of the household — a small, ancient, bearded guardian who silently watches over the home, keeping track of everything that happens within it, and warning of impending disaster. Domovoy the framework plays the same role for your process: it watches silently in the background, keeps track of every allocation, file descriptor, thread, and signal, and surfaces problems the moment they occur.
 
 ---
 
@@ -14,17 +20,18 @@ Domovoy is designed to be embedded in shipped software so that you can gather hi
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Build System](#build-system)
-  - [Build Options](#build-options)
-  - [Sanitizer Builds](#sanitizer-builds)
+  - [`scripts/build.sh`](#scriptsbuildsh)
+  - [Sanitizer CMake Options](#sanitizer-cmake-options)
 - [Test Scripts](#test-scripts)
-  - [Unit Tests](#unit-tests)
-  - [Integration Tests](#integration-tests)
-  - [Benchmarks](#benchmarks)
-  - [Full Suite](#full-suite)
+  - [`scripts/test_unit.sh`](#scriptstest_unitsh--unit-tests)
+  - [`scripts/test_integration.sh`](#scriptstest_integrationsh--integration-tests)
+  - [`scripts/test_bench.sh`](#scriptstest_benchsh--benchmarks)
+  - [`scripts/test_all.sh`](#scriptstest_allsh--full-suite-orchestrator)
 - [Docker / Containerized Testing](#docker--containerized-testing)
-  - [Building Images](#building-images)
-  - [Running Tests in Docker](#running-tests-in-docker)
-  - [Docker Compose](#docker-compose)
+  - [Prerequisites](#prerequisites)
+  - [`scripts/docker_build.sh`](#scriptsdocker_buildsh--build-images)
+  - [`scripts/docker_test.sh`](#scriptsdocker_testsh--run-tests-in-a-container)
+  - [`docker/docker-compose.yml`](#dockerdocker-composeyml--parallel-multi-environment-testing)
 - [Usage in Your Application](#usage-in-your-application)
   - [Initialization](#initialization)
   - [Configuration Reference](#configuration-reference)

@@ -48,8 +48,15 @@ if [[ ! -x "${BENCH_BIN}" ]]; then
     exit 1
 fi
 
+# Ensure MIN_TIME has a unit suffix like 's' for Google Benchmark
+if [[ "$MIN_TIME" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+    MIN_TIME_ARG="${MIN_TIME}s"
+else
+    MIN_TIME_ARG="${MIN_TIME}"
+fi
+
 BENCH_ARGS=(
-    "--benchmark_min_time=${MIN_TIME}"
+    "--benchmark_min_time=${MIN_TIME_ARG}"
     "--benchmark_format=${FORMAT}"
 )
 

@@ -49,20 +49,20 @@ echo "============================================================"
 CTEST_ARGS=(--test-dir "${BUILD_DIR}" --output-on-failure)
 [[ $VERBOSE -eq 1 ]] && CTEST_ARGS+=(--verbose)
 
-declare -A TEST_MAP=(
-    [leak]="LeakTest"
-    [cpu]="CpuTest"
-    [io]="IoTest"
-    [crash]="CrashTest"
-)
-
 run_test() {
     local name="$1"
-    local label="${TEST_MAP[$name]:-}"
-    if [[ -z "$label" ]]; then
-        echo "Unknown test: $name. Valid: leak cpu io crash all"
-        exit 1
-    fi
+    local label=""
+    case "$name" in
+        leak)  label="LeakTest" ;;
+        cpu)   label="CpuTest" ;;
+        io)    label="IoTest" ;;
+        crash) label="CrashTest" ;;
+        *)
+            echo "Unknown test: $name. Valid: leak cpu io crash all"
+            exit 1
+            ;;
+    esac
+
     echo ""
     echo "[integration] Running ${label}..."
     ctest "${CTEST_ARGS[@]}" --no-tests=error -R "^${label}$"

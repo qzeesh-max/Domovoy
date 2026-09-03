@@ -154,28 +154,52 @@ cd domovoy
 
 ## Build System
 
-Domovoy uses CMake as its build system. A convenience wrapper script `scripts/build.sh` is provided.
+Domovoy uses CMake as its build system. A convenience wrapper script [`scripts/build.sh`](scripts/build.sh) handles all CMake configuration and build invocation.
 
-### Build Options
+### `scripts/build.sh`
+
+```
+Usage: ./scripts/build.sh [OPTIONS]
+
+  --type <Debug|Release|RelWithDebInfo>   Build type (default: Debug)
+  --asan                                  Enable AddressSanitizer
+  --tsan                                  Enable ThreadSanitizer
+  --ubsan                                 Enable UndefinedBehaviorSanitizer
+  --msan                                  Enable MemorySanitizer (Clang only)
+  --clean                                 Delete build directory first
+  --jobs <N>                              Parallel jobs (default: nproc)
+```
 
 ```bash
-# Debug build (default)
+# Default Debug build
 ./scripts/build.sh
 
 # Release build
 ./scripts/build.sh --type Release
 
-# RelWithDebInfo (release + debug symbols, useful for profiling)
+# RelWithDebInfo — optimised + debug symbols, best for profiling
 ./scripts/build.sh --type RelWithDebInfo
 
-# Clean + rebuild
+# Start fresh
 ./scripts/build.sh --clean
 
-# Parallel jobs
-./scripts/build.sh --jobs 16
+# Limit parallel jobs
+./scripts/build.sh --jobs 8
+
+# ASan + UBSan in one go
+./scripts/build.sh --asan --ubsan
+
+# TSan (cannot be combined with ASan)
+./scripts/build.sh --tsan
 ```
 
-Alternatively, invoke CMake directly for full control:
+The script respects the `DOMOVOY_BUILD_DIR` environment variable to override where the build tree is written. This is used automatically by `docker_test.sh` to avoid polluting the host build directory:
+
+```bash
+DOMOVOY_BUILD_DIR=/tmp/domovoy-build ./scripts/build.sh
+```
+
+Alternatively, invoke CMake directly:
 
 ```bash
 cmake -B build \
@@ -186,163 +210,264 @@ cmake -B build \
 cmake --build build --parallel 8
 ```
 
-### Sanitizer Builds
+### Sanitizer CMake Options
 
-Domovoy includes `cmake/Sanitizers.cmake` which exposes the following CMake options:
+Domovoy's `cmake/Sanitizers.cmake` exposes these options directly if you prefer raw CMake:
 
-| Flag | Description |
-|---|---|
-| `-DENABLE_ASAN=ON` | AddressSanitizer — detects heap/stack/global buffer overflows, use-after-free |
-| `-DENABLE_TSAN=ON` | ThreadSanitizer — detects data races |
-| `-DENABLE_UBSAN=ON` | UndefinedBehaviorSanitizer — detects signed overflow, null deref, etc. |
-| `-DENABLE_MSAN=ON` | MemorySanitizer — detects reads of uninitialized memory (Clang only) |
+| CMake Flag | Equivalent script flag | Description |
+|---|---|---|
+| `-DENABLE_ASAN=ON` | `--asan` | AddressSanitizer — buffer overflows, use-after-free |
+| `-DENABLE_TSAN=ON` | `--tsan` | ThreadSanitizer — data races |
+| `-DENABLE_UBSAN=ON` | `--ubsan` | UndefinedBehaviorSanitizer — signed overflow, null deref |
+| `-DENABLE_MSAN=ON` | `--msan` | MemorySanitizer — uninitialized reads (Clang only) |
 
-> **Note:** TSan and ASan cannot be used together. MSAN requires a fully instrumented toolchain.
-
-Via script:
-```bash
-# ASan + UBSan
-./scripts/build.sh --asan --ubsan
-
-# TSan
-./scripts/build.sh --tsan
-```
+> **Note:** TSan and ASan are mutually exclusive. MSan requires a fully Clang-instrumented stdlib.
 
 ---
 
 ## Test Scripts
 
-All test scripts live under `scripts/` and are self-contained. They will automatically invoke `build.sh` if the build directory does not exist or is stale.
+All test scripts live under `scripts/` and are self-contained. Each script will automatically invoke `build.sh` (building the project if the build directory does not exist yet), then invoke CTest with the appropriate label filter.
 
-### Unit Tests
+> **CTest labels**: every test target carries a CTest label (`unit` or `integration`) so that each script selects only its own tests. The scripts use `--no-tests=error` so a misconfigured build that produces 0 matching tests is treated as a failure rather than a silent pass.
 
-Unit tests cover the `IsolatedAllocator` in isolation.
+### `scripts/test_unit.sh` — Unit Tests
+
+Unit tests target isolated components (currently the `IsolatedAllocator`).
+
+```
+Usage: ./scripts/test_unit.sh [OPTIONS]
+
+  --build-type <type>    Forwarded to build.sh (default: Debug)
+  --asan                 Enable AddressSanitizer
+  --tsan                 Enable ThreadSanitizer
+  --ubsan                Enable UndefinedBehaviorSanitizer
+  --filter <pattern>     GTest filter (e.g. "AllocatorTest.SingleAllocation")
+  --verbose              Verbose CTest output
+```
 
 ```bash
-# Run all unit tests
+# Basic run
 ./scripts/test_unit.sh
 
 # With AddressSanitizer
 ./scripts/test_unit.sh --asan
 
-# Filter to a specific test
+# Filter to a specific test case
 ./scripts/test_unit.sh --filter "AllocatorTest.MultipleAllocations"
 
-# Verbose output
+# Verbose (prints each test's stdout even on success)
 ./scripts/test_unit.sh --verbose
 ```
 
-### Integration Tests
+### `scripts/test_integration.sh` — Integration Tests
 
-Integration tests exercise the complete framework lifecycle with real leak/CPU/IO/crash scenarios.
+Integration tests exercise the full framework lifecycle. Each scenario (`leak`, `cpu`, `io`, `crash`) starts and shuts down a real `DomovoyCore` instance.
+
+```
+Usage: ./scripts/test_integration.sh [OPTIONS]
+
+  --build-type <type>    Forwarded to build.sh (default: Debug)
+  --asan / --tsan / --ubsan
+  --test <name>          Run one suite: leak | cpu | io | crash | all
+  --verbose
+```
 
 ```bash
 # Run all integration tests
 ./scripts/test_integration.sh
 
-# Run a specific suite
+# Run a single scenario
 ./scripts/test_integration.sh --test leak
 ./scripts/test_integration.sh --test cpu
 ./scripts/test_integration.sh --test io
 ./scripts/test_integration.sh --test crash
 
-# With sanitizers
+# Run with AddressSanitizer + UBSan
 ./scripts/test_integration.sh --asan --ubsan
-
-# Verbose
-./scripts/test_integration.sh --verbose
 ```
 
-### Benchmarks
+### `scripts/test_bench.sh` — Benchmarks
 
-Benchmarks are built in **Release** mode to produce meaningful numbers.
+Benchmarks are **always built in Release mode** regardless of the host build directory's current type, because Debug timings are not meaningful.
+
+```
+Usage: ./scripts/test_bench.sh [OPTIONS]
+
+  --filter <regex>         Google Benchmark name filter
+  --format <json|console>  Output format (default: console)
+  --out <file>             Write results to file (combine with --format json)
+  --min-time <seconds>     Minimum time per benchmark (default: 1.0)
+```
 
 ```bash
-# Run all benchmarks
+# Run all benchmarks (console output)
 ./scripts/test_bench.sh
 
-# Filter
+# Only run allocator benchmarks
 ./scripts/test_bench.sh --filter "BM_IsolatedAllocator"
 
-# Output as JSON (for CI artifact storage)
+# Save results as JSON for CI artifact storage
 ./scripts/test_bench.sh --format json --out bench_results.json
 
-# Longer minimum time for more stable results
+# Use longer measurement time for more stable numbers
 ./scripts/test_bench.sh --min-time 3.0
 ```
 
-### Full Suite
+### `scripts/test_all.sh` — Full Suite Orchestrator
+
+Runs unit, integration, and benchmarks in sequence and prints a pass/fail summary.
+
+```
+Usage: ./scripts/test_all.sh [OPTIONS]
+
+  --asan / --tsan / --ubsan   Applied to unit + integration (not benchmarks)
+  --skip-bench                Skip the benchmark step
+  --verbose
+```
 
 ```bash
-# Run everything (unit + integration + benchmarks)
+# Run everything
 ./scripts/test_all.sh
 
-# With ASan for unit + integration, benchmarks skipped
-./scripts/test_all.sh --asan --skip-bench
+# Sanitizers on, benchmarks skipped (fast CI mode)
+./scripts/test_all.sh --asan --ubsan --skip-bench
 
-# Verbose
+# Full run with verbose output
 ./scripts/test_all.sh --verbose
+```
+
+Example output:
+```
+============================================================
+  SUMMARY
+============================================================
+  ✅  Unit Tests
+  ✅  Integration Tests
+  ✅  Benchmarks
+
+  Passed: 3   Failed: 0
+============================================================
 ```
 
 ---
 
 ## Docker / Containerized Testing
 
-Two Docker images are provided to enable testing on Linux from any host (including macOS):
+Docker support lets you run Domovoy's full test suite on Linux from any host — including macOS (via [Colima](https://github.com/abiosoft/colima) or Docker Desktop). All scripts use bind-mounts so the container always sees your latest source, and build artefacts stay in the container at `DOMOVOY_BUILD_DIR=/tmp/domovoy-build` (never polluting your host `build/` directory).
 
-| Image | Base | Compiler | Purpose |
-|---|---|---|---|
-| `domovoy:ubuntu` | Ubuntu 22.04 | GCC 11 | Standard Linux build and test |
-| `domovoy:clang` | Ubuntu 22.04 | Clang 17 | Sanitizer-focused testing |
+### Prerequisites
 
-### Building Images
+```bash
+# macOS — start a lightweight Linux VM
+brew install colima docker
+colima start
+
+# Or use Docker Desktop (https://www.docker.com/products/docker-desktop)
+```
+
+### Available Images
+
+| Image | Dockerfile | Base | Compiler | Purpose |
+|---|---|---|---|---|
+| `domovoy:ubuntu` | `docker/Dockerfile.ubuntu` | Ubuntu 22.04 | GCC 11 | Standard Linux build and all tests |
+| `domovoy:clang` | `docker/Dockerfile.clang` | Ubuntu 22.04 | Clang 17 | Sanitizer-focused (ASan / UBSan) runs |
+
+### `scripts/docker_build.sh` — Build Images
+
+```
+Usage: ./scripts/docker_build.sh [OPTIONS]
+
+  --image <ubuntu|clang|all>   Which image to build (default: all)
+  --tag <prefix>               Tag prefix (default: domovoy)
+  --no-cache                   Pass --no-cache to docker build
+```
 
 ```bash
 # Build both images
 ./scripts/docker_build.sh
 
-# Build a specific image
+# Build only the Ubuntu image
 ./scripts/docker_build.sh --image ubuntu
+
+# Build only the Clang image
 ./scripts/docker_build.sh --image clang
 
-# Force rebuild (no cache)
+# Force a fresh build (no layer cache)
 ./scripts/docker_build.sh --no-cache
 ```
 
-### Running Tests in Docker
+### `scripts/docker_test.sh` — Run Tests in a Container
+
+```
+Usage: ./scripts/docker_test.sh [OPTIONS]
+
+  --image <ubuntu|clang|all>              Image to use (default: all)
+  --suite <unit|integration|bench|all>   Test suite (default: all)
+  --asan / --tsan / --ubsan              Sanitizer flags passed into the container
+  --rebuild                              Re-build the image before running
+  --interactive                          Open a bash shell instead of running tests
+```
+
+> **Auto-build:** if the requested image does not exist locally, `docker_test.sh` automatically builds it before running. You never need to call `docker_build.sh` separately unless you want explicit control.
 
 ```bash
-# Run the full test suite in the Ubuntu container
-./scripts/docker_test.sh --image ubuntu --suite all
+# First run — image is built automatically, then unit tests run
+./scripts/docker_test.sh --image ubuntu --suite unit
 
-# Run integration tests in the Clang container with ASan + UBSan
+# Run all integration tests in the Ubuntu container
+./scripts/docker_test.sh --image ubuntu --suite integration
+
+# Run with AddressSanitizer + UBSan inside the Clang container
 ./scripts/docker_test.sh --image clang --suite integration --asan --ubsan
 
-# Run only benchmarks
+# Run benchmarks (Release build inside the container)
 ./scripts/docker_test.sh --image ubuntu --suite bench
 
-# Open an interactive shell for debugging
+# Run the full suite across both images (builds + tests both)
+./scripts/docker_test.sh --image all --suite all
+
+# Force re-build the image (e.g. after changing a Dockerfile)
+./scripts/docker_test.sh --image ubuntu --suite unit --rebuild
+
+# Drop into an interactive bash shell for debugging
+./scripts/docker_test.sh --image ubuntu --interactive
+# Or in the Clang container:
 ./scripts/docker_test.sh --image clang --interactive
 ```
 
-> **Security note:** The container needs `--cap-add SYS_PTRACE` and `--security-opt seccomp=unconfined` for sanitizers and the crash handler's `sigaltstack` to work correctly. The `docker_test.sh` script adds these automatically.
+> **Security note:** `--cap-add SYS_PTRACE` and `--security-opt seccomp=unconfined` are passed automatically by `docker_test.sh`. These are required for `sigaltstack` (crash handler) and sanitizer symbolisation to work inside the container.
 
-### Docker Compose
+### `docker/docker-compose.yml` — Parallel Multi-Environment Testing
 
-`docker/docker-compose.yml` orchestrates parallel runs across environments:
+The Compose file runs the Ubuntu and Clang environments in parallel and has a separate `bench` profile for benchmark-only runs.
 
 ```bash
-# Run Ubuntu tests and Clang sanitizer tests in parallel
+# Run Ubuntu + Clang tests in parallel (default services)
 docker compose -f docker/docker-compose.yml up
 
-# Run only benchmarks (uses a Docker volume for results)
+# Build images first if needed
+docker compose -f docker/docker-compose.yml build
+
+# Run only the Ubuntu service
+docker compose -f docker/docker-compose.yml run ubuntu-tests
+
+# Run only the Clang sanitizer service
+docker compose -f docker/docker-compose.yml run clang-sanitizers
+
+# Run benchmarks (opt-in via the 'bench' profile)
 docker compose -f docker/docker-compose.yml --profile bench up benchmarks
 
-# View benchmark results
-docker compose -f docker/docker-compose.yml run \
-    -v bench-results:/results ubuntu-tests \
-    cat /results/bench_results.json
+# Follow logs across all services
+docker compose -f docker/docker-compose.yml up --abort-on-container-exit
 ```
+
+#### Build directory isolation
+
+All container runs set `DOMOVOY_BUILD_DIR=/tmp/domovoy-build` (inside the container filesystem). This means:
+- The host's `build/` directory (compiled for macOS/the host OS) is **never touched** by the container.
+- The container's build tree is **ephemeral** — each `docker run` starts with a clean CMake configure step.
+- There is no CMake cache path mismatch between host and container builds.
 
 ---
 

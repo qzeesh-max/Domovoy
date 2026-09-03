@@ -47,7 +47,7 @@ echo "============================================================"
 # Ensure the project is built
 "${SCRIPT_DIR}/build.sh" --type "${BUILD_TYPE}" "${BUILD_EXTRA_ARGS[@]+"${BUILD_EXTRA_ARGS[@]}"}"
 
-CTEST_ARGS=(--test-dir "${BUILD_DIR}" --output-on-failure --label-regex "^unit$")
+CTEST_ARGS=(--test-dir "${BUILD_DIR}" --output-on-failure -L "^unit$")
 
 if [[ $VERBOSE -eq 1 ]]; then
     CTEST_ARGS+=(--verbose)
@@ -59,10 +59,10 @@ fi
 
 echo ""
 echo "[test_unit] Running unit tests..."
-ctest "${CTEST_ARGS[@]}" || {
-    # Fallback: run binary directly so filter works
+# --no-tests=error makes ctest exit non-zero if nothing matched the label
+ctest "${CTEST_ARGS[@]}" --no-tests=error || {
     echo ""
-    echo "[test_unit] Running test_allocator directly..."
+    echo "[test_unit] Running test_allocator directly (ctest label match failed)..."
     FILTER_ARG=""
     [[ -n "$GTEST_FILTER" ]] && FILTER_ARG="--gtest_filter=${GTEST_FILTER}"
     "${BUILD_DIR}/tests/unit/test_allocator" $FILTER_ARG

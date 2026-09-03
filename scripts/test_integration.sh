@@ -65,7 +65,7 @@ run_test() {
     fi
     echo ""
     echo "[integration] Running ${label}..."
-    ctest "${CTEST_ARGS[@]}" -R "^${label}$"
+    ctest "${CTEST_ARGS[@]}" --no-tests=error -R "^${label}$"
 }
 
 if [[ "$TARGET_TEST" == "all" ]]; then

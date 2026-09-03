@@ -32,10 +32,13 @@ static void BM_CpuProfilerOverhead(benchmark::State& state) {
     for (int i = 0; i < state.range(0); ++i) {
         threads.emplace_back([]() {
             auto start = std::chrono::steady_clock::now();
+            int sink = 0;
             while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(10)) {
-                volatile int x = 0;
+                int x = 0;
                 for (int j = 0; j < 1000; ++j) x += j;
+                sink += x;
             }
+            benchmark::DoNotOptimize(sink);
         });
     }
 

@@ -20,8 +20,10 @@
 #include "domovoy/core.h"
 #include <cstdio>    // snprintf — portable on all platforms
 #include <fcntl.h>
+#if !defined(_WIN32)
 #include <unistd.h>
 #include <sys/socket.h>
+#endif
 
 namespace domovoy {
 namespace io {
@@ -69,9 +71,9 @@ void IoMonitor::Enable() {
 #if defined(_WIN32)
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
-    DetourAttach(&(PVOID&)TrueCreateFileA, HookedCreateFileA);
-    DetourAttach(&(PVOID&)TrueCreateFileW, HookedCreateFileW);
-    DetourAttach(&(PVOID&)TrueCloseHandle, HookedCloseHandle);
+    DetourAttach(&(PVOID&)TrueCreateFileA, (PVOID)HookedCreateFileA);
+    DetourAttach(&(PVOID&)TrueCreateFileW, (PVOID)HookedCreateFileW);
+    DetourAttach(&(PVOID&)TrueCloseHandle, (PVOID)HookedCloseHandle);
     DetourTransactionCommit();
 #endif
 }
@@ -83,9 +85,9 @@ void IoMonitor::Disable() {
 #if defined(_WIN32)
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
-    DetourDetach(&(PVOID&)TrueCreateFileA, HookedCreateFileA);
-    DetourDetach(&(PVOID&)TrueCreateFileW, HookedCreateFileW);
-    DetourDetach(&(PVOID&)TrueCloseHandle, HookedCloseHandle);
+    DetourDetach(&(PVOID&)TrueCreateFileA, (PVOID)HookedCreateFileA);
+    DetourDetach(&(PVOID&)TrueCreateFileW, (PVOID)HookedCreateFileW);
+    DetourDetach(&(PVOID&)TrueCloseHandle, (PVOID)HookedCloseHandle);
     DetourTransactionCommit();
 #endif
     std::lock_guard<std::mutex> lock(mutex_);

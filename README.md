@@ -20,13 +20,13 @@ Domovoy is designed to be embedded in shipped software so that you can gather hi
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Build System](#build-system)
-  - [`scripts/build.sh`](#scriptsbuildsh)
+  - [`scripts/build.sh` / `scripts/build.bat`](#scriptsbuildsh-and-scriptsbuildbat)
   - [Sanitizer CMake Options](#sanitizer-cmake-options)
 - [Test Scripts](#test-scripts)
-  - [`scripts/test_unit.sh`](#scriptstest_unitsh--unit-tests)
-  - [`scripts/test_integration.sh`](#scriptstest_integrationsh--integration-tests)
-  - [`scripts/test_bench.sh`](#scriptstest_benchsh--benchmarks)
-  - [`scripts/test_all.sh`](#scriptstest_allsh--full-suite-orchestrator)
+  - [`scripts/test_unit.sh` / `scripts/test_unit.bat`](#scriptstest_unitsh--scriptstest_unitbat--unit-tests)
+  - [`scripts/test_integration.sh` / `scripts/test_integration.bat`](#scriptstest_integrationsh--scriptstest_integrationbat--integration-tests)
+  - [`scripts/test_bench.sh` / `scripts/test_bench.bat`](#scriptstest_benchsh--scriptstest_benchbat--benchmarks)
+  - [`scripts/test_all.sh` / `scripts/test_all.bat`](#scriptstest_allsh--scriptstest_allbat--full-suite-orchestrator)
 - [Docker / Containerized Testing](#docker--containerized-testing)
   - [Prerequisites](#prerequisites)
   - [`scripts/docker_build.sh`](#scriptsdocker_buildsh--build-images)
@@ -148,25 +148,29 @@ git clone https://github.com/yourorg/domovoy.git
 cd domovoy
 
 # Build (Debug)
-./scripts/build.sh
+./scripts/build.sh           # macOS/Linux
+scripts\build.bat            # Windows
 
 # Run all tests
-./scripts/test_all.sh
+./scripts/test_all.sh        # macOS/Linux
+scripts\test_all.bat         # Windows
 
 # Run benchmarks
-./scripts/test_bench.sh
+./scripts/test_bench.sh      # macOS/Linux
+scripts\test_bench.bat       # Windows
 ```
 
 ---
 
 ## Build System
 
-Domovoy uses CMake as its build system. A convenience wrapper script [`scripts/build.sh`](scripts/build.sh) handles all CMake configuration and build invocation.
+Domovoy uses CMake as its build system. Convenience wrapper scripts [`scripts/build.sh`](scripts/build.sh) (and [`scripts/build.bat`](scripts/build.bat) for Windows) handle all CMake configuration and build invocation.
 
-### `scripts/build.sh`
+### `scripts/build.sh` and `scripts/build.bat`
 
 ```
 Usage: ./scripts/build.sh [OPTIONS]
+       scripts\build.bat [OPTIONS]
 
   --type <Debug|Release|RelWithDebInfo>   Build type (default: Debug)
   --asan                                  Enable AddressSanitizer
@@ -234,18 +238,19 @@ Domovoy's `cmake/Sanitizers.cmake` exposes these options directly if you prefer 
 
 ## Test Scripts
 
-All test scripts live under `scripts/` and are self-contained. Each script will automatically invoke `build.sh` (building the project if the build directory does not exist yet), then invoke CTest with the appropriate label filter.
+All test scripts live under `scripts/` and are self-contained. They are available as `.sh` scripts for POSIX systems and `.bat` scripts for Windows. Each script will automatically invoke `build.sh` or `build.bat` (building the project if the build directory does not exist yet), then invoke CTest with the appropriate label filter.
 
 > **CTest labels**: every test target carries a CTest label (`unit` or `integration`) so that each script selects only its own tests. The scripts use `--no-tests=error` so a misconfigured build that produces 0 matching tests is treated as a failure rather than a silent pass.
 
-### `scripts/test_unit.sh` — Unit Tests
+### `scripts/test_unit.sh` / `scripts/test_unit.bat` — Unit Tests
 
 Unit tests target isolated components (currently the `IsolatedAllocator`).
 
 ```
 Usage: ./scripts/test_unit.sh [OPTIONS]
+       scripts\test_unit.bat [OPTIONS]
 
-  --build-type <type>    Forwarded to build.sh (default: Debug)
+  --build-type <type>    Forwarded to build script (default: Debug)
   --asan                 Enable AddressSanitizer
   --tsan                 Enable ThreadSanitizer
   --ubsan                Enable UndefinedBehaviorSanitizer
@@ -267,14 +272,15 @@ Usage: ./scripts/test_unit.sh [OPTIONS]
 ./scripts/test_unit.sh --verbose
 ```
 
-### `scripts/test_integration.sh` — Integration Tests
+### `scripts/test_integration.sh` / `scripts/test_integration.bat` — Integration Tests
 
 Integration tests exercise the full framework lifecycle. Each scenario (`leak`, `cpu`, `io`, `crash`) starts and shuts down a real `DomovoyCore` instance.
 
 ```
 Usage: ./scripts/test_integration.sh [OPTIONS]
+       scripts\test_integration.bat [OPTIONS]
 
-  --build-type <type>    Forwarded to build.sh (default: Debug)
+  --build-type <type>    Forwarded to build script (default: Debug)
   --asan / --tsan / --ubsan
   --test <name>          Run one suite: leak | cpu | io | crash | all
   --verbose
@@ -294,12 +300,13 @@ Usage: ./scripts/test_integration.sh [OPTIONS]
 ./scripts/test_integration.sh --asan --ubsan
 ```
 
-### `scripts/test_bench.sh` — Benchmarks
+### `scripts/test_bench.sh` / `scripts/test_bench.bat` — Benchmarks
 
 Benchmarks are **always built in Release mode** regardless of the host build directory's current type, because Debug timings are not meaningful.
 
 ```
 Usage: ./scripts/test_bench.sh [OPTIONS]
+       scripts\test_bench.bat [OPTIONS]
 
   --filter <regex>         Google Benchmark name filter
   --format <json|console>  Output format (default: console)
@@ -321,12 +328,13 @@ Usage: ./scripts/test_bench.sh [OPTIONS]
 ./scripts/test_bench.sh --min-time 3.0
 ```
 
-### `scripts/test_all.sh` — Full Suite Orchestrator
+### `scripts/test_all.sh` / `scripts/test_all.bat` — Full Suite Orchestrator
 
 Runs unit, integration, and benchmarks in sequence and prints a pass/fail summary.
 
 ```
 Usage: ./scripts/test_all.sh [OPTIONS]
+       scripts\test_all.bat [OPTIONS]
 
   --asan / --tsan / --ubsan   Applied to unit + integration (not benchmarks)
   --skip-bench                Skip the benchmark step
@@ -795,11 +803,16 @@ domovoy/
 │       ├── profiler.h          # CpuMonitor
 │       └── reporter.h          # Reporter interface
 ├── scripts/
-│   ├── build.sh                # Main build script
-│   ├── test_unit.sh            # Unit test runner
-│   ├── test_integration.sh     # Integration test runner
-│   ├── test_bench.sh           # Benchmark runner
-│   ├── test_all.sh             # Full suite runner
+│   ├── build.sh                # Main build script (Linux/macOS)
+│   ├── build.bat               # Main build script (Windows)
+│   ├── test_unit.sh            # Unit test runner (Linux/macOS)
+│   ├── test_unit.bat           # Unit test runner (Windows)
+│   ├── test_integration.sh     # Integration test runner (Linux/macOS)
+│   ├── test_integration.bat    # Integration test runner (Windows)
+│   ├── test_bench.sh           # Benchmark runner (Linux/macOS)
+│   ├── test_bench.bat          # Benchmark runner (Windows)
+│   ├── test_all.sh             # Full suite runner (Linux/macOS)
+│   ├── test_all.bat            # Full suite runner (Windows)
 │   ├── docker_build.sh         # Build Docker images
 │   └── docker_test.sh          # Run tests in Docker
 └── src/

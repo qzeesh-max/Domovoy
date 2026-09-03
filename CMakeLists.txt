@@ -41,7 +41,11 @@ FetchContent_Declare(
   GIT_TAG        v1.8.3
 )
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googlebenchmark)
+if(TARGET benchmark)
+    target_compile_options(benchmark PRIVATE "-Wno-error=switch")
+endif()
 
 # nlohmann_json
 FetchContent_Declare(
@@ -57,7 +61,25 @@ if(WIN32)
         GIT_REPOSITORY https://github.com/microsoft/Detours.git
         GIT_TAG main
     )
-    FetchContent_MakeAvailable(detours)
+    FetchContent_GetProperties(detours)
+    if(NOT detours_POPULATED)
+        FetchContent_Populate(detours)
+    endif()
+    add_library(detours STATIC
+        ${detours_SOURCE_DIR}/src/detours.cpp
+        ${detours_SOURCE_DIR}/src/disasm.cpp
+        ${detours_SOURCE_DIR}/src/image.cpp
+        ${detours_SOURCE_DIR}/src/modules.cpp
+        ${detours_SOURCE_DIR}/src/creatwth.cpp
+    )
+    target_include_directories(detours PUBLIC ${detours_SOURCE_DIR}/src)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64")
+        target_compile_definitions(detours PRIVATE DETOURS_X64=1)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "i686|x86")
+        target_compile_definitions(detours PRIVATE DETOURS_X86=1)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|aarch64")
+        target_compile_definitions(detours PRIVATE DETOURS_ARM64=1)
+    endif()
 endif()
 
 # cpptrace (for stack traces)

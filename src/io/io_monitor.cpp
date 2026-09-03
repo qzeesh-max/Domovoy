@@ -1,5 +1,6 @@
 #include "domovoy/io_monitor.h"
 #include "domovoy/core.h"
+#include <cstdio>    // snprintf — portable on all platforms
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -83,7 +84,7 @@ void IoMonitor::OnOpen(int fd, const char* path) {
     FdInfo info;
     info.is_socket = false;
     if (path) {
-        strlcpy(info.path, path, sizeof(info.path));
+        snprintf(info.path, sizeof(info.path), "%s", path);
     } else {
         info.path[0] = '\0';
     }
@@ -101,7 +102,7 @@ void IoMonitor::OnSocket(int fd, int domain, int type, int protocol) {
     std::lock_guard<std::mutex> lock(mutex_);
     FdInfo info;
     info.is_socket = true;
-    strlcpy(info.path, "socket", sizeof(info.path));
+    snprintf(info.path, sizeof(info.path), "%s", "socket");
     open_fds_[fd] = info;
 }
 

@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-BUILD_DIR="${PROJECT_ROOT}/build"
+BUILD_DIR="${DOMOVOY_BUILD_DIR:-${PROJECT_ROOT}/build}"
 
 echo "============================================================"
 echo "  Domovoy Build"
@@ -56,6 +56,7 @@ echo "  Type:  ${BUILD_TYPE}"
 echo "  ASan:  ${ENABLE_ASAN}  TSan: ${ENABLE_TSAN}"
 echo "  UBSan: ${ENABLE_UBSAN} MSan: ${ENABLE_MSAN}"
 echo "  Jobs:  ${JOBS}"
+echo "  BuildDir: ${BUILD_DIR}"
 echo "============================================================"
 
 if [[ $CLEAN -eq 1 && -d "${BUILD_DIR}" ]]; then

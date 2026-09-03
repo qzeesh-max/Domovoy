@@ -92,6 +92,7 @@ run_in_container() {
 
     docker run --rm \
         -v "${PROJECT_ROOT}:/workspace" \
+        -e "DOMOVOY_BUILD_DIR=/tmp/domovoy-build" \
         --cap-add SYS_PTRACE \
         --security-opt seccomp=unconfined \
         "${full_tag}" \

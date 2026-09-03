@@ -19,6 +19,8 @@ services:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
+    environment:
+      - DOMOVOY_BUILD_DIR=/tmp/domovoy-build
     command: ["/workspace/scripts/test_all.sh", "--skip-bench"]
 
   # ---------------------------------------------------------------------------
@@ -39,6 +41,7 @@ services:
     environment:
       - CC=clang
       - CXX=clang++
+      - DOMOVOY_BUILD_DIR=/tmp/domovoy-build
     command:
       - /bin/bash
       - -c
@@ -58,6 +61,8 @@ services:
     volumes:
       - ..:/workspace
       - bench-results:/results
+    environment:
+      - DOMOVOY_BUILD_DIR=/tmp/domovoy-build
     command:
       - /bin/bash
       - -c

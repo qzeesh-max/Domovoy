@@ -60,8 +60,9 @@ run_in_container() {
     local variant="$1"
     local full_tag="${TAG_PREFIX}:${variant}"
 
-    if [[ $REBUILD -eq 1 ]]; then
-        echo "🔨  Rebuilding image ${full_tag}..."
+    # Auto-build the image if it doesn't exist locally (or --rebuild requested)
+    if [[ $REBUILD -eq 1 ]] || ! docker image inspect "${full_tag}" &>/dev/null; then
+        echo "🔨  Image '${full_tag}' not found locally — building now..."
         "${SCRIPT_DIR}/docker_build.sh" --image "${variant}" --tag "${TAG_PREFIX}"
     fi
 

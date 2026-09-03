@@ -1,0 +1,19 @@
+add_executable(test_leak test_leak.cpp)
+target_compile_options(test_leak PRIVATE ${DOMOVOY_WARNING_FLAGS})
+target_link_libraries(test_leak PRIVATE domovoy GTest::gtest GTest::gtest_main)
+add_test(NAME LeakTest COMMAND test_leak)
+
+add_executable(test_cpu test_cpu.cpp)
+target_compile_options(test_cpu PRIVATE ${DOMOVOY_WARNING_FLAGS})
+target_link_libraries(test_cpu PRIVATE domovoy GTest::gtest GTest::gtest_main)
+add_test(NAME CpuTest COMMAND test_cpu)
+
+add_executable(test_io test_io.cpp)
+target_compile_options(test_io PRIVATE ${DOMOVOY_WARNING_FLAGS})
+target_link_libraries(test_io PRIVATE domovoy GTest::gtest GTest::gtest_main)
+add_test(NAME IoTest COMMAND test_io)
+
+add_executable(test_crash test_crash.cpp)
+target_compile_options(test_crash PRIVATE ${DOMOVOY_WARNING_FLAGS})
+target_link_libraries(test_crash PRIVATE domovoy GTest::gtest GTest::gtest_main)
+add_test(NAME CrashTest COMMAND test_crash)

@@ -849,4 +849,7 @@ domovoy/
 
 ## License
 
-Domovoy is released under the **MIT License**. See [LICENSE](LICENSE) for details.
+Domovoy is released under the **GNU Affero General Public License v3.0** (AGPL-3.0-or-later). See [LICENSE](LICENSE) for the full license text.
+
+Third-party dependencies and their respective licenses are documented in [CREDITS.md](CREDITS.md).
+

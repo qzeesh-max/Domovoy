@@ -1,0 +1,52 @@
+# =============================================================================
+# Domovoy — Clang/LLVM containerized build & test image (sanitizer-focused)
+# =============================================================================
+FROM ubuntu:22.04
+
+LABEL org.opencontainers.image.title="Domovoy CI — Clang/LLVM"
+LABEL org.opencontainers.image.description="Clang-based sanitizer test environment for Domovoy"
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# ---------------------------------------------------------------------------
+# LLVM toolchain (Clang 17 via official LLVM APT repo)
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget gnupg lsb-release software-properties-common ca-certificates \
+ && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
+ && add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-17 main" \
+ && apt-get update && apt-get install -y --no-install-recommends \
+    clang-17 \
+    clang-tidy-17 \
+    clang-format-17 \
+    lld-17 \
+    llvm-17 \
+    cmake \
+    ninja-build \
+    git \
+    build-essential \
+    python3 \
+    libdwarf-dev \
+    libelf-dev \
+    zlib1g-dev \
+    libzstd-dev \
+ && update-alternatives --install /usr/bin/clang   clang   /usr/bin/clang-17   100 \
+ && update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 100 \
+ && update-alternatives --install /usr/bin/lld     lld     /usr/bin/lld-17     100 \
+ && rm -rf /var/lib/apt/lists/*
+
+# Force Clang as default compiler
+ENV CC=clang
+ENV CXX=clang++
+
+RUN useradd -ms /bin/bash builder
+USER builder
+WORKDIR /workspace
+
+COPY --chown=builder:builder . /workspace/
+
+# By default run the full sanitizer suite
+CMD ["/bin/bash", "-c", \
+     "/workspace/scripts/test_unit.sh --asan --ubsan && \
+      /workspace/scripts/test_integration.sh --asan --ubsan"]

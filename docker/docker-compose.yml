@@ -1,0 +1,72 @@
+# =============================================================================
+# Docker Compose file for Domovoy multi-environment testing
+# =============================================================================
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # GCC / Ubuntu — unit + integration tests
+  # ---------------------------------------------------------------------------
+  ubuntu-tests:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ubuntu
+    image: domovoy:ubuntu
+    container_name: domovoy-ubuntu
+    volumes:
+      - ..:/workspace
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    command: ["/workspace/scripts/test_all.sh", "--skip-bench"]
+
+  # ---------------------------------------------------------------------------
+  # Clang + Sanitizers — unit + integration
+  # ---------------------------------------------------------------------------
+  clang-sanitizers:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.clang
+    image: domovoy:clang
+    container_name: domovoy-clang
+    volumes:
+      - ..:/workspace
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      - CC=clang
+      - CXX=clang++
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /workspace/scripts/test_unit.sh --asan --ubsan &&
+        /workspace/scripts/test_integration.sh --asan --ubsan
+
+  # ---------------------------------------------------------------------------
+  # Release benchmarks (GCC image, Release build)
+  # ---------------------------------------------------------------------------
+  benchmarks:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ubuntu
+    image: domovoy:ubuntu
+    container_name: domovoy-bench
+    volumes:
+      - ..:/workspace
+      - bench-results:/results
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /workspace/scripts/test_bench.sh \
+          --format json \
+          --out /results/bench_results.json
+    profiles:
+      - bench
+
+volumes:
+  bench-results:

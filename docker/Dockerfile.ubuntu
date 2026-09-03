@@ -1,0 +1,62 @@
+# =============================================================================
+# Domovoy — Ubuntu 22.04 / GCC containerized build & test image
+# =============================================================================
+FROM ubuntu:22.04
+
+LABEL org.opencontainers.image.title="Domovoy CI"
+LABEL org.opencontainers.image.description="Cross-compilation and test environment for Domovoy"
+LABEL org.opencontainers.image.source="https://github.com/yourorg/domovoy"
+
+# Suppress interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# ---------------------------------------------------------------------------
+# System dependencies
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    ninja-build \
+    git \
+    curl \
+    wget \
+    ca-certificates \
+    pkg-config \
+    # Debuggers / symbol tools
+    gdb \
+    binutils \
+    # Sanitizer runtimes
+    libasan6 \
+    libtsan0 \
+    libubsan1 \
+    # DWARF / debug info
+    libdwarf-dev \
+    libelf-dev \
+    zlib1g-dev \
+    libzstd-dev \
+    # Python for some CMake detection steps
+    python3 \
+ && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# CMake minimum version guard (Ubuntu 22.04 ships 3.22, we need >= 3.20)
+# ---------------------------------------------------------------------------
+RUN cmake --version
+
+# ---------------------------------------------------------------------------
+# Set up a non-root build user
+# ---------------------------------------------------------------------------
+RUN useradd -ms /bin/bash builder
+USER builder
+WORKDIR /workspace
+
+# ---------------------------------------------------------------------------
+# Copy project source (bind-mount or COPY depending on use case)
+# ---------------------------------------------------------------------------
+COPY --chown=builder:builder . /workspace/
+
+# ---------------------------------------------------------------------------
+# Default command — override at `docker run` time
+# ---------------------------------------------------------------------------
+CMD ["/workspace/scripts/test_all.sh"]

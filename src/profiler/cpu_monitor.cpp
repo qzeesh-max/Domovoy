@@ -100,7 +100,56 @@ void CpuMonitor::CheckThreadsForHighCpu() {
         vm_deallocate(mach_task_self(), (vm_address_t)threads, thread_count * sizeof(thread_act_t));
     }
 #elif defined(_WIN32)
-    // Stub for Windows thread enumeration using CreateToolhelp32Snapshot
+    HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (hThreadSnap == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    DWORD currentProcessId = GetCurrentProcessId();
+    THREADENTRY32 te32;
+    te32.dwSize = sizeof(THREADENTRY32);
+
+    if (Thread32First(hThreadSnap, &te32)) {
+        do {
+            if (te32.th32OwnerProcessID == currentProcessId) {
+                HANDLE hThread = OpenThread(THREAD_QUERY_INFORMATION | THREAD_QUERY_LIMITED_INFORMATION, FALSE, te32.th32ThreadID);
+                if (hThread) {
+                    FILETIME creationTime, exitTime, kernelTime, userTime;
+                    if (GetThreadTimes(hThread, &creationTime, &exitTime, &kernelTime, &userTime)) {
+                        ULARGE_INTEGER kTime, uTime;
+                        kTime.LowPart = kernelTime.dwLowDateTime;
+                        kTime.HighPart = kernelTime.dwHighDateTime;
+                        uTime.LowPart = userTime.dwLowDateTime;
+                        uTime.HighPart = userTime.dwHighDateTime;
+                        
+                        // FILETIME is in 100-nanosecond intervals. Convert to nanoseconds.
+                        uint64_t cpu_time = (kTime.QuadPart + uTime.QuadPart) * 100ULL;
+                        uint64_t thread_id = static_cast<uint64_t>(te32.th32ThreadID);
+                        auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+
+                        auto it = thread_states_.find(thread_id);
+                        if (it != thread_states_.end()) {
+                            uint64_t cpu_delta = cpu_time - it->second.last_cpu_time_ns;
+                            uint64_t time_delta = now - it->second.last_check_time_ns;
+
+                            if (time_delta > 0) {
+                                double cpu_usage = static_cast<double>(cpu_delta) / static_cast<double>(time_delta);
+                                if (cpu_usage > 0.90) {
+                                    CaptureBacktraceForThread(thread_id);
+                                }
+                            }
+                            it->second.last_cpu_time_ns = cpu_time;
+                            it->second.last_check_time_ns = now;
+                        } else {
+                            thread_states_[thread_id] = {cpu_time, static_cast<uint64_t>(now)};
+                        }
+                    }
+                    CloseHandle(hThread);
+                }
+            }
+        } while (Thread32Next(hThreadSnap, &te32));
+    }
+    CloseHandle(hThreadSnap);
 #endif
 }
 

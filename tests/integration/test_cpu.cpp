@@ -48,12 +48,10 @@ TEST(IntegrationTest, HighCpu) {
 
     domovoy::DomovoyCore::Shutdown();
 
-#if !defined(_WIN32)
-    // Verify report was generated (CPU monitor is stubbed on Windows)
+    // Verify report was generated
     nlohmann::json report = FindAndParseReport("domovoy_cpu");
     ASSERT_FALSE(report.is_null()) << "CPU report was not generated!";
-    ASSERT_EQ(report["type"], "cpu_hotspot");
-#endif
+    ASSERT_EQ(report["type"], "high_cpu_thread");
     
     SUCCEED();
 }

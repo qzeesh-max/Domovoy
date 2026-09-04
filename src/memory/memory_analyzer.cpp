@@ -23,10 +23,7 @@
 #include <algorithm>
 #include <cstdio>
 
-#if defined(__APPLE__) || defined(__linux__)
-#include <dlfcn.h>
-#include <cxxabi.h>
-#endif
+#include <cpptrace/cpptrace.hpp>
 
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
@@ -164,26 +161,31 @@ void MemoryAnalyzer::RunLeakDetection() {
 
     auto resolve_type = [](void* address, size_t size) -> isolated_string {
         if (size < sizeof(void*)) return "";
-#if defined(__APPLE__) || defined(__linux__)
+
         void* vptr = *(void**)address;
-        Dl_info info;
-        if (dladdr(vptr, &info) && info.dli_sname) {
-            isolated_string sname(info.dli_sname);
-            if (sname.find("_ZTV") == 0) {
-                int status = 0;
-                char* demangled = abi::__cxa_demangle(info.dli_sname, 0, 0, &status);
-                if (demangled) {
-                    isolated_string result(demangled);
-                    free(demangled);
-                    if (result.find("vtable for ") == 0) {
-                        result = result.substr(11);
-                    }
-                    return result;
-                }
-                return sname;
+        
+        cpptrace::raw_trace trace;
+        trace.frames.push_back(reinterpret_cast<uintptr_t>(vptr));
+        auto resolved = trace.resolve();
+        
+        if (!resolved.frames.empty()) {
+            std::string sym = resolved.frames[0].symbol;
+            if (sym.empty()) return "";
+            
+            // GCC / Clang / MSYS2 demangles to: vtable for MyClass
+            if (sym.find("vtable for ") == 0) {
+                return isolated_string(sym.substr(11).c_str());
             }
+            // MSVC demangles to: const MyClass::`vftable'
+            if (sym.find("const ") == 0) {
+                size_t vftable_pos = sym.find("::`vftable'");
+                if (vftable_pos != std::string::npos) {
+                    std::string class_name = sym.substr(6, vftable_pos - 6);
+                    return isolated_string(class_name.c_str());
+                }
+            }
+            return isolated_string(sym.c_str());
         }
-#endif
         return "";
     };
 

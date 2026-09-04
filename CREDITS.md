@@ -15,6 +15,7 @@ Domovoy relies on several open-source libraries. We are grateful to the authors 
 | **Microsoft Detours** | MIT License | https://github.com/microsoft/Detours | Windows Win32 API interposition for IO monitoring |
 | **libdwarf** | LGPL 2.1 / BSD | https://github.com/davea42/libdwarf-code | DWARF debug symbol resolution (used by cpptrace) |
 | **zstd** | BSD 3-Clause / GPLv2 | https://github.com/facebook/zstd | Compression support for DWARF sections (used by libdwarf) |
+| **parallel_hashmap** | Apache License 2.0 | https://github.com/greg7mdp/parallel-hashmap | Cache-friendly concurrent hash map for memory tracking |
 
 ---
 
@@ -193,4 +194,24 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
 ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+---
+
+### 8. parallel_hashmap
+Copyright 2019 Gregory Meyer
+License: Apache License, Version 2.0
+
+```
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 ```

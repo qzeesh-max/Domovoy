@@ -608,14 +608,41 @@ domovoy_crash_1693600000000.json
 
 ```json
 {
-  "leaks": [
-    { "address": 140234561024, "size": 1024 },
-    { "address": 140234562048, "size": 4096 }
+  "type": "memory_leaks",
+  "summary": {
+    "total_leaks": 2,
+    "total_leaked_bytes": 5120,
+    "by_size": [
+      {
+        "size": 4096,
+        "count": 1,
+        "sample_addresses": ["0x140234562048"]
+      },
+      {
+        "size": 1024,
+        "count": 1,
+        "sample_addresses": ["0x140234561024"]
+      }
+    ]
+  },
+  "leaks_by_size": [
+    {
+      "size": 4096,
+      "addresses": [
+        { "address": "0x140234562048", "type": "MyLeakyClass" }
+      ]
+    },
+    {
+      "size": 1024,
+      "addresses": [
+        { "address": "0x140234561024" }
+      ]
+    }
   ]
 }
 ```
 
-> The `address` field is the raw heap pointer of the unreachable allocation. Future versions will include allocation stack traces.
+> The `type` field contains the demangled C++ class name if a valid Virtual Method Table (vtable) was found at the beginning of the leaked allocation. Future versions will include allocation stack traces.
 
 ### CPU Hotspot Report
 

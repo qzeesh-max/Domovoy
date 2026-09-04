@@ -20,6 +20,13 @@
 #include "domovoy/core.h"
 #include "domovoy/reporter.h"
 #include <iostream>
+#include <algorithm>
+#include <cstdio>
+
+#if defined(__APPLE__) || defined(__linux__)
+#include <dlfcn.h>
+#include <cxxabi.h>
+#endif
 
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
@@ -137,28 +144,106 @@ void MemoryAnalyzer::RunLeakDetection() {
     ScanDataSegments(allocations);
     ScanThreadStacks(allocations);
 
-    // Reporting
-    isolated_json<> report;
-    report["type"] = "memory_leaks";
-    auto& leaks = report["leaks"] = isolated_json<>::array();
-
+    // Filter and sort leaked allocations
+    AllocationList leaked_allocations;
     size_t total_leaks = 0;
     size_t total_leaked_bytes = 0;
 
     for (const auto& alloc : allocations) {
         if (!alloc.marked) {
+            leaked_allocations.push_back(alloc);
             total_leaks++;
             total_leaked_bytes += alloc.size;
-            
-            isolated_json<> leak_info;
-            leak_info["address"] = reinterpret_cast<uintptr_t>(alloc.address);
-            leak_info["size"] = alloc.size;
-            leaks.push_back(leak_info);
         }
     }
 
+    std::sort(leaked_allocations.begin(), leaked_allocations.end(), [](const AllocationRecord& a, const AllocationRecord& b) {
+        if (a.size != b.size) return a.size > b.size;
+        return a.address < b.address;
+    });
+
+    auto resolve_type = [](void* address, size_t size) -> isolated_string {
+        if (size < sizeof(void*)) return "";
+#if defined(__APPLE__) || defined(__linux__)
+        void* vptr = *(void**)address;
+        Dl_info info;
+        if (dladdr(vptr, &info) && info.dli_sname) {
+            isolated_string sname(info.dli_sname);
+            if (sname.find("_ZTV") == 0) {
+                int status = 0;
+                char* demangled = abi::__cxa_demangle(info.dli_sname, 0, 0, &status);
+                if (demangled) {
+                    isolated_string result(demangled);
+                    free(demangled);
+                    if (result.find("vtable for ") == 0) {
+                        result = result.substr(11);
+                    }
+                    return result;
+                }
+                return sname;
+            }
+        }
+#endif
+        return "";
+    };
+
+    isolated_json<> report;
+    report["type"] = "memory_leaks";
+    report["summary"] = isolated_json<>::object();
     report["summary"]["total_leaks"] = total_leaks;
     report["summary"]["total_leaked_bytes"] = total_leaked_bytes;
+    
+    auto& summary_by_size = report["summary"]["by_size"] = isolated_json<>::array();
+    auto& leaks_by_size = report["leaks_by_size"] = isolated_json<>::array();
+
+    size_t current_size = 0;
+    size_t current_count = 0;
+    isolated_json<> current_sample_addresses = isolated_json<>::array();
+    isolated_json<> current_leak_group;
+
+    auto flush_group = [&]() {
+        if (current_count > 0) {
+            isolated_json<> summary_item;
+            summary_item["size"] = current_size;
+            summary_item["count"] = current_count;
+            summary_item["sample_addresses"] = current_sample_addresses;
+            summary_by_size.push_back(summary_item);
+            
+            leaks_by_size.push_back(current_leak_group);
+        }
+    };
+
+    for (const auto& alloc : leaked_allocations) {
+        if (alloc.size != current_size) {
+            flush_group();
+            current_size = alloc.size;
+            current_count = 0;
+            current_sample_addresses = isolated_json<>::array();
+            current_leak_group = isolated_json<>::object();
+            current_leak_group["size"] = current_size;
+            current_leak_group["addresses"] = isolated_json<>::array();
+        }
+        
+        current_count++;
+        
+        char addr_buf[32];
+        snprintf(addr_buf, sizeof(addr_buf), "0x%zx", reinterpret_cast<uintptr_t>(alloc.address));
+        isolated_string addr_str(addr_buf);
+
+        if (current_sample_addresses.size() < 100) {
+            current_sample_addresses.push_back(addr_str);
+        }
+        
+        isolated_json<> leak_detail;
+        leak_detail["address"] = addr_str;
+        isolated_string type_name = resolve_type(alloc.address, alloc.size);
+        if (!type_name.empty()) {
+            leak_detail["type"] = type_name;
+        }
+        
+        current_leak_group["addresses"].push_back(leak_detail);
+    }
+    flush_group();
 
     if (total_leaks > 0) {
         Reporter* reporter = DomovoyCore::GetReporter();

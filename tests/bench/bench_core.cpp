@@ -72,4 +72,35 @@ static void BM_CpuProfilerOverhead(benchmark::State& state) {
 }
 BENCHMARK(BM_CpuProfilerOverhead)->Arg(1)->Arg(4)->Arg(8);
 
+
+
+static void BM_LeakCollectorOverhead(benchmark::State& state) {
+    bool enable_tracking = state.range(0);
+    
+    domovoy::DomovoyConfig config;
+    config.enable_leak_detection = enable_tracking;
+    domovoy::DomovoyCore::Init(config);
+
+    // Number of allocations to perform per iteration
+    constexpr int kAllocCount = 1000;
+    std::vector<void*> ptrs(kAllocCount);
+
+    for (auto _ : state) {
+        // Allocate memory
+        for (int i = 0; i < kAllocCount; ++i) {
+            ptrs[i] = malloc(64);
+            benchmark::DoNotOptimize(ptrs[i]);
+        }
+        
+        // Free memory
+        for (int i = 0; i < kAllocCount; ++i) {
+            free(ptrs[i]);
+        }
+    }
+    
+    domovoy::DomovoyCore::Shutdown();
+}
+// Arg(0) = Tracker disabled (baseline), Arg(1) = Tracker enabled
+BENCHMARK(BM_LeakCollectorOverhead)->Arg(0)->Arg(1);
+
 BENCHMARK_MAIN();

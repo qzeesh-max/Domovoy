@@ -30,6 +30,7 @@ namespace memory {
     void GetLinuxTrackedAllocations(AllocationList& out_list);
 }
 }
+#include <dlfcn.h>
 #endif
 
 #include <cpptrace/cpptrace.hpp>
@@ -41,6 +42,7 @@ namespace memory {
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
 #include <mach/mach.h>
+#include <dlfcn.h>
 #elif defined(_WIN32)
 #include <windows.h>
 #include <typeinfo>
@@ -263,6 +265,35 @@ void MemoryAnalyzer::RunLeakDetection() {
                         }
                     }
                 }
+            }
+        }
+#elif defined(__GNUC__) && (defined(__linux__) || defined(__APPLE__))
+        Dl_info info;
+        // Verify vptr is in a loaded module's mapped region
+        if (dladdr(vptr, &info) != 0) {
+            void* type_info_ptr = ((void**)vptr)[-1];
+            if (dladdr(type_info_ptr, &info) != 0) {
+                 void* ti_vptr = *(void**)type_info_ptr;
+                 if (dladdr(ti_vptr, &info) != 0 && info.dli_sname != nullptr) {
+                     std::string sname = info.dli_sname;
+                     // All standard C++ RTTI types inherit from class_type_info or type_info
+                     if (sname.find("class_type_info") != std::string::npos || sname.find("type_info") != std::string::npos) {
+                         const char* type_name_str = ((const char**)type_info_ptr)[1];
+                         // Verify the string pointer is also mapped before reading it
+                         if (dladdr((void*)type_name_str, &info) != 0) {
+                             int status = -1;
+                             char* demangled = abi::__cxa_demangle(type_name_str, nullptr, nullptr, &status);
+                             if (status == 0 && demangled) {
+                                 isolated_string result(demangled);
+                                 free(demangled);
+                                 return result;
+                             } else {
+                                 // Fallback to mangled name if demangling fails
+                                 return isolated_string(type_name_str);
+                             }
+                         }
+                     }
+                 }
             }
         }
 #endif

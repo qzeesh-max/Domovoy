@@ -20,6 +20,7 @@
 #include "domovoy/core.h"
 #include <vector>
 #include <iostream>
+#include <thread>
 #include <cpptrace/cpptrace.hpp>
 #include "test_utils.h"
 
@@ -51,6 +52,67 @@ TEST(IntegrationTest, MemoryLeak) {
     ASSERT_EQ(report["type"], "memory_leaks");
     ASSERT_TRUE(report.contains("summary"));
     ASSERT_GE(report["summary"]["total_leaks"].get<int>(), 1);
+    
+    SUCCEED();
+}
+
+TEST(IntegrationTest, MemoryLeakStress) {
+    CleanUpOldReports();
+    
+    domovoy::DomovoyConfig config;
+    config.output_dir = ".";
+    config.enable_leak_detection = true;
+    config.enable_leak_report_details = true;
+    domovoy::DomovoyCore::Init(config);
+
+    constexpr int kNumThreads = 8;
+    constexpr int kLeaksPerThread = 100;
+    std::vector<std::thread> threads;
+    
+    for (int i = 0; i < kNumThreads; ++i) {
+        threads.emplace_back([]() {
+            for (int j = 0; j < kLeaksPerThread; ++j) {
+                // Intentionally leak a polymorphic object
+                BaseClass* leaked_obj = new DerivedLeakClass();
+                (void)leaked_obj;
+            }
+        });
+    }
+    
+    for (auto& t : threads) {
+        t.join();
+    }
+    
+    // Shutting down Domovoy should generate a report
+    domovoy::DomovoyCore::Shutdown();
+    
+    nlohmann::json report = FindAndParseReport("domovoy_leaks");
+    ASSERT_FALSE(report.is_null()) << "Leak report was not generated!";
+    ASSERT_EQ(report["type"], "memory_leaks");
+    ASSERT_TRUE(report.contains("summary"));
+    
+    // We expect at least kNumThreads * kLeaksPerThread leaks. 
+    // There could be other background leaks from test framework overhead, so we use >=
+    ASSERT_GE(report["summary"]["total_leaks"].get<int>(), kNumThreads * kLeaksPerThread);
+    
+    // Validate that RTTI extraction correctly resolved the type name for these leaks
+    bool found_rtti = false;
+    if (report.contains("leaks_by_size")) {
+        for (const auto& group : report["leaks_by_size"]) {
+            for (const auto& addr_info : group["addresses"]) {
+                if (addr_info.contains("type")) {
+                    std::string type_name = addr_info["type"].get<std::string>();
+                    if (type_name.find("DerivedLeakClass") != std::string::npos) {
+                        found_rtti = true;
+                        break;
+                    }
+                }
+            }
+            if (found_rtti) break;
+        }
+    }
+    
+    ASSERT_TRUE(found_rtti) << "Failed to resolve RTTI for leaked objects\nJSON Dump:\n" << report.dump(4);
     
     SUCCEED();
 }

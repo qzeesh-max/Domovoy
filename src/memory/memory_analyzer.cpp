@@ -22,14 +22,39 @@
 #include <iostream>
 #include <algorithm>
 #include <cstdio>
+#include <cctype>
 
 #include <cpptrace/cpptrace.hpp>
+
+#if defined(__GNUC__) || defined(__clang__)
+#include <cxxabi.h>
+#endif
 
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
 #include <mach/mach.h>
 #elif defined(_WIN32)
 #include <windows.h>
+#include <typeinfo>
+
+#ifdef _WIN64
+struct RTTICompleteObjectLocator {
+    unsigned long signature;
+    unsigned long offset;
+    unsigned long cdOffset;
+    unsigned long pTypeDescriptor;
+    unsigned long pClassDescriptor;
+    unsigned long pSelf;
+};
+#else
+struct RTTICompleteObjectLocator {
+    unsigned long signature;
+    unsigned long offset;
+    unsigned long cdOffset;
+    struct TypeDescriptor* pTypeDescriptor;
+    void* pClassDescriptor;
+};
+#endif
 #endif
 
 namespace domovoy {
@@ -161,30 +186,89 @@ void MemoryAnalyzer::RunLeakDetection() {
 
     auto resolve_type = [](void* address, size_t size) -> isolated_string {
         if (size < sizeof(void*)) return "";
-
         void* vptr = *(void**)address;
+
+#if defined(_WIN32)
+        HMODULE hModule = NULL;
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                (LPCSTR)vptr, &hModule)) {
+            return ""; 
+        }
+#endif
         
+#if defined(_MSC_VER)
+        const char* type_name_str = "";
+        __try {
+            void* rtti_ptr = ((void**)vptr)[-1];
+            if (rtti_ptr) {
+                RTTICompleteObjectLocator* pLocator = (RTTICompleteObjectLocator*)rtti_ptr;
+#ifdef _WIN64
+                if (pLocator->signature == 1) {
+                    void* baseAddress = nullptr;
+                    RtlPcToFileHeader((PVOID)pLocator, &baseAddress);
+                    if (baseAddress) {
+                        std::type_info* pType = (std::type_info*)((char*)baseAddress + pLocator->pTypeDescriptor);
+                        type_name_str = pType->name();
+                    }
+                }
+#else
+                if (pLocator->signature == 0) {
+                    std::type_info* pType = (std::type_info*)pLocator->pTypeDescriptor;
+                    type_name_str = pType->name();
+                }
+#endif
+            }
+        } __except(EXCEPTION_EXECUTE_HANDLER) {
+            // Access violation reading RTTI, not a valid polymorphic object
+        }
+        
+        if (type_name_str && type_name_str[0] != '\0') {
+            std::string class_name = type_name_str;
+            // MSVC type_info::name() returns strings like "class MyClass" or "struct MyStruct"
+            if (class_name.find("class ") == 0) {
+                class_name = class_name.substr(6);
+            } else if (class_name.find("struct ") == 0) {
+                class_name = class_name.substr(7);
+            }
+            return isolated_string(class_name.c_str());
+        }
+        
+#elif defined(__GNUC__) && defined(_WIN32)
+        // MinGW/GCC on Windows (Itanium ABI). Safe RTTI extraction avoiding virtual calls.
+        void* rtti_ptr_loc = (void*)(((void**)vptr) - 1);
+        if (!IsBadReadPtr(rtti_ptr_loc, sizeof(void*))) {
+            void* pType = ((void**)vptr)[-1];
+            if (pType && !IsBadReadPtr(pType, sizeof(void*) * 2)) {
+                // Itanium type_info layout: vptr at [0], __name at [1]
+                const char* type_name_str = ((const char**)pType)[1];
+                if (type_name_str && !IsBadReadPtr((void*)type_name_str, 1)) {
+                    // Check if string looks like a valid mangled name (basic heuristic to avoid random garbage)
+                    if (isalnum((unsigned char)type_name_str[0]) || type_name_str[0] == 'N' || type_name_str[0] == 'Z') {
+                        int status = -1;
+                        char* demangled = abi::__cxa_demangle(type_name_str, nullptr, nullptr, &status);
+                        if (status == 0 && demangled) {
+                            isolated_string result(demangled);
+                            free(demangled);
+                            return result;
+                        }
+                    }
+                }
+            }
+        }
+#endif
+
         cpptrace::raw_trace trace;
         trace.frames.push_back(reinterpret_cast<uintptr_t>(vptr));
         auto resolved = trace.resolve();
         
         if (!resolved.frames.empty()) {
             std::string sym = resolved.frames[0].symbol;
-            if (sym.empty()) return "";
-            
-            // GCC / Clang / MSYS2 demangles to: vtable for MyClass
-            if (sym.find("vtable for ") == 0) {
-                return isolated_string(sym.substr(11).c_str());
-            }
-            // MSVC demangles to: const MyClass::`vftable'
-            if (sym.find("const ") == 0) {
-                size_t vftable_pos = sym.find("::`vftable'");
-                if (vftable_pos != std::string::npos) {
-                    std::string class_name = sym.substr(6, vftable_pos - 6);
-                    return isolated_string(class_name.c_str());
+            if (!sym.empty()) {
+                if (sym.find("vtable for ") == 0) {
+                    return isolated_string(sym.substr(11).c_str());
                 }
+                return isolated_string(sym.c_str());
             }
-            return isolated_string(sym.c_str());
         }
         return "";
     };

@@ -761,8 +761,12 @@ Implements a Boehm-Demers-Weiser-inspired reachability analysis:
 1. **Enumerate all heap blocks** using platform-native APIs (`malloc_zone` on macOS, `HeapWalk` on Windows).
 2. **Scan all root regions** — stack, BSS, data segment — for pointer-sized values.
 3. Any heap block whose address does not appear anywhere in the root scan is reported as a **potential leak**.
+4. **Extract exact C++ types** for leaked objects containing a virtual method table (vtable). This is done safely without triggering access violations:
+   - **MSVC (Windows):** Safely parses the `RTTICompleteObjectLocator` metadata using SEH (`__try` / `__except`).
+   - **MinGW/GCC (Windows):** Parses the Itanium `type_info` layout using defensive `IsBadReadPtr` checks to avoid virtual dispatch crashes on corrupted memory.
+   - **macOS / Linux (POSIX):** Falls back to `cpptrace` leveraging DWARF symbols and `dladdr`.
 
-Limitations: conservative (no type information), false positives possible for blocks reachable only through encoded/compressed pointers.
+Limitations: conservative (no type information for non-polymorphic types), false positives possible for blocks reachable only through encoded/compressed pointers.
 
 ### CpuMonitor
 

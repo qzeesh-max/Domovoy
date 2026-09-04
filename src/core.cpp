@@ -26,12 +26,15 @@
 namespace domovoy {
 
 Reporter* DomovoyCore::reporter_ = nullptr;
+DomovoyConfig DomovoyCore::config_;
 bool DomovoyCore::initialized_ = false;
 
 void DomovoyCore::Init(const DomovoyConfig& config) {
     if (initialized_) {
         return;
     }
+    
+    config_ = config;
 
     // 1. Initialize the isolated memory allocator first!
     memory::IsolatedAllocator::GetInstance().Initialize(config.allocator_capacity_bytes);
@@ -92,6 +95,10 @@ void DomovoyCore::Shutdown() {
 
 Reporter* DomovoyCore::GetReporter() {
     return reporter_;
+}
+
+const DomovoyConfig& DomovoyCore::GetConfig() {
+    return config_;
 }
 
 } // namespace domovoy

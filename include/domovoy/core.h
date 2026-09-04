@@ -34,6 +34,9 @@ struct DomovoyConfig {
     bool enable_io_monitoring = true;
     bool enable_crash_handler = true;
 
+    bool enable_leak_report_summary = true;
+    bool enable_leak_report_details = true;
+
     // Output directory for reports
     const char* output_dir = ".";
 };
@@ -49,8 +52,12 @@ public:
     // Access to the reporter
     static Reporter* GetReporter();
 
+    // Access to the configuration
+    static const DomovoyConfig& GetConfig();
+
 private:
     static Reporter* reporter_;
+    static DomovoyConfig config_;
     static bool initialized_;
 };
 

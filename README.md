@@ -709,7 +709,7 @@ domovoy_crash_1693600000000.json
 
 - **IO interposition**: Microsoft Detours library hooks `CreateFileA`, `CreateFileW`, and `CloseHandle`.
 - **Heap walk**: `HeapWalk()` Win32 API for full heap enumeration (planned).
-- **Crash handling**: `AddVectoredExceptionHandler` catches `EXCEPTION_ACCESS_VIOLATION`, `EXCEPTION_ILLEGAL_INSTRUCTION`, `EXCEPTION_INT_DIVIDE_BY_ZERO`, and `EXCEPTION_STACK_OVERFLOW`.
+- **Crash handling**: `SetUnhandledExceptionFilter` catches `EXCEPTION_ACCESS_VIOLATION`, `EXCEPTION_ILLEGAL_INSTRUCTION`, `EXCEPTION_INT_DIVIDE_BY_ZERO`, and `EXCEPTION_STACK_OVERFLOW`.
 - **Stack traces**: `cpptrace` with `DbgHelp` for symbol resolution.
 
 ---
@@ -802,7 +802,7 @@ On `Shutdown()`, any FD still present in the tracking map (not yet `close()`d) i
 
 Sets up an **alternate signal stack** (`sigaltstack`) so the handler runs even if the main stack has overflowed. Installs `SA_SIGINFO | SA_ONSTACK` handlers for `SIGSEGV`, `SIGABRT`, `SIGILL`, `SIGFPE`, `SIGBUS`.
 
-On Windows, `AddVectoredExceptionHandler` is installed at `ULONG_MAX` priority (runs before any application SEH handlers).
+On Windows, `SetUnhandledExceptionFilter` is installed. It runs after all application SEH blocks, ensuring only true unhandled crashes are caught.
 
 When a crash is caught:
 1. A `cpptrace` backtrace is captured.

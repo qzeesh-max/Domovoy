@@ -42,8 +42,8 @@ private:
 #if defined(__APPLE__) || defined(__linux__)
     static void HandleCrashSignal(int sig, siginfo_t* info, void* ucontext);
 #elif defined(_WIN32)
-    void* veh_handle_{nullptr};
-    static long __stdcall VectoredExceptionHandler(struct _EXCEPTION_POINTERS* ep);
+    LPTOP_LEVEL_EXCEPTION_FILTER previous_filter_{nullptr};
+    static long __stdcall UnhandledExceptionFilter(struct _EXCEPTION_POINTERS* ep);
 #endif
 };
 

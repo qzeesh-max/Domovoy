@@ -75,7 +75,7 @@ void CrashHandler::HandleCrashSignal(int sig, siginfo_t* info, void* ucontext) {
     }
 }
 #elif defined(_WIN32)
-long __stdcall CrashHandler::VectoredExceptionHandler(struct _EXCEPTION_POINTERS* ep) {
+long __stdcall CrashHandler::UnhandledExceptionFilter(struct _EXCEPTION_POINTERS* ep) {
     if (ep->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION ||
         ep->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION ||
         ep->ExceptionRecord->ExceptionCode == EXCEPTION_INT_DIVIDE_BY_ZERO ||
@@ -101,6 +101,10 @@ long __stdcall CrashHandler::VectoredExceptionHandler(struct _EXCEPTION_POINTERS
         if (reporter) {
             reporter->ReportCrash(report);
         }
+    }
+    
+    if (CrashHandler::GetInstance().previous_filter_) {
+        return CrashHandler::GetInstance().previous_filter_(ep);
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
@@ -133,9 +137,10 @@ void CrashHandler::Install() {
         sigaction(sig, &sa, &old_actions[sig]);
     }
 #elif defined(_WIN32)
-    // AddVectoredExceptionHandler
+    // SetUnhandledExceptionFilter runs *after* all application SEH blocks, ensuring we only
+    // catch true crashes, avoiding interference with normal control flow access violations.
     if (!installed_) {
-        veh_handle_ = AddVectoredExceptionHandler(1, VectoredExceptionHandler);
+        previous_filter_ = SetUnhandledExceptionFilter(UnhandledExceptionFilter);
     }
 #endif
 }
@@ -154,10 +159,8 @@ void CrashHandler::Uninstall() {
     altstack.ss_flags = SS_DISABLE;
     sigaltstack(&altstack, nullptr);
 #elif defined(_WIN32)
-    if (veh_handle_) {
-        RemoveVectoredExceptionHandler(veh_handle_);
-        veh_handle_ = nullptr;
-    }
+    SetUnhandledExceptionFilter(previous_filter_);
+    previous_filter_ = nullptr;
 #endif
 }
 

@@ -77,10 +77,10 @@ Domovoy hooks into the process lifecycle at `Init()` and `Shutdown()`, passively
 | Feature | macOS | Linux | Windows |
 |---|---|---|---|
 | **Isolated Allocator** (OS-mapped memory) | ✅ | ✅ | ✅ |
-| **Memory Leak Detection** (heap walk) | ✅ | ✅ (planned) | ✅ (planned) |
-| **Heap Corruption Detection** | 🔜 | 🔜 | 🔜 |
+| **Memory Leak Detection** (heap walk) | ✅ | ❌ | ✅ |
+| **Heap Corruption Detection** | ❌ | ❌ | ❌ |
 | **CPU Hotspot Profiling** (passive thread) | ✅ | ✅ | ✅ |
-| **IO Leak Detection** (`open`/`socket`/`close`) | ✅ `DYLD_INTERPOSE` | ✅ `LD_PRELOAD` | ✅ Detours |
+| **IO Leak Detection** (`open`/`socket`/`close`) | ✅ `DYLD_INTERPOSE` | ❌ | ✅ Detours |
 | **Crash Context** (backtrace on fatal signal) | ✅ `sigaction` | ✅ `sigaction` | ✅ VEH |
 | **JSON Reporting** | ✅ | ✅ | ✅ |
 | **Custom Reporter Interface** | ✅ | ✅ | ✅ |
@@ -700,15 +700,15 @@ domovoy_crash_1693600000000.json
 
 ### Linux
 
-- **IO interposition**: The `DYLD_INTERPOSE` hooks compile out on Linux. Linux support uses `__attribute__((visibility("default")))` function wrapping or `LD_PRELOAD` injection (planned).
-- **Heap walk**: Linux `malloc` does not expose a public enumeration API. Domovoy will use `mallinfo2()` for aggregate stats and iterate `/proc/self/maps` (planned).
+- **IO interposition**: Currently not supported on Linux.
+- **Heap walk**: Linux `malloc` does not expose a public enumeration API, so heap walking is not supported.
 - **Crash handling**: Identical `sigaltstack` + `sigaction` path as macOS.
 - **Stack traces**: `cpptrace` with `libunwind` or `execinfo` and DWARF symbols.
 
 ### Windows
 
 - **IO interposition**: Microsoft Detours library hooks `CreateFileA`, `CreateFileW`, and `CloseHandle`.
-- **Heap walk**: `HeapWalk()` Win32 API for full heap enumeration (planned).
+- **Heap walk**: Uses the `HeapWalk()` Win32 API for full heap enumeration.
 - **Crash handling**: `SetUnhandledExceptionFilter` catches `EXCEPTION_ACCESS_VIOLATION`, `EXCEPTION_ILLEGAL_INSTRUCTION`, `EXCEPTION_INT_DIVIDE_BY_ZERO`, and `EXCEPTION_STACK_OVERFLOW`.
 - **Stack traces**: `cpptrace` with `DbgHelp` for symbol resolution.
 
@@ -791,7 +791,7 @@ Intercepts file descriptor lifecycle calls:
 | Platform | Mechanism | Intercepted calls |
 |---|---|---|
 | macOS | `DYLD_INTERPOSE` | `open`, `open64`, `close`, `socket` |
-| Linux | Wrapper functions + `LD_PRELOAD` (planned) | `open`, `openat`, `close`, `socket` |
+| Linux | Not supported | N/A |
 | Windows | Microsoft Detours | `CreateFileA`, `CreateFileW`, `CloseHandle` |
 
 On `Shutdown()`, any FD still present in the tracking map (not yet `close()`d) is reported as an IO leak, along with its path and whether it is a socket.

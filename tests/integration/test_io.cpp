@@ -20,8 +20,15 @@
 #include "domovoy/core.h"
 #include <fcntl.h>
 #include <unistd.h>
+#include "test_utils.h"
+
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 TEST(IntegrationTest, IoLeak) {
+    CleanUpOldReports();
+    
     domovoy::DomovoyConfig config;
     config.output_dir = ".";
     // Enable IO monitoring in our test config
@@ -29,14 +36,27 @@ TEST(IntegrationTest, IoLeak) {
     domovoy::DomovoyCore::Init(config);
 
     // Intentionally leak a file descriptor
+#if defined(_WIN32)
+    HANDLE fd = CreateFileA("test_io_leak.tmp", GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    ASSERT_NE(fd, INVALID_HANDLE_VALUE);
+#else
     int fd = open("test_io_leak.tmp", O_CREAT | O_RDWR, 0666);
     ASSERT_GE(fd, 0);
+#endif
 
     // Shutdown should report the leaked FD
     domovoy::DomovoyCore::Shutdown();
 
+    nlohmann::json report = FindAndParseReport("domovoy_io_leak");
+    ASSERT_FALSE(report.is_null()) << "IO Leak report was not generated!";
+    ASSERT_EQ(report["type"], "fd_leak");
+
     // Clean up the file
+#if defined(_WIN32)
+    CloseHandle(fd);
+#else
     close(fd);
+#endif
     unlink("test_io_leak.tmp");
 
     SUCCEED();

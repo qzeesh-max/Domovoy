@@ -18,6 +18,7 @@
 
 #include <gtest/gtest.h>
 #include "domovoy/core.h"
+#include "test_utils.h"
 
 // Disable ASAN/UBSAN on this specific function so it actually crashes with SIGSEGV
 // instead of getting caught by sanitizers (if they were enabled for the test target)
@@ -32,11 +33,16 @@ void CauseCrash() {
 }
 
 TEST(IntegrationTest, CrashHandler) {
+    CleanUpOldReports();
+    
     // In a real framework, catching a crash means the process exits after reporting.
     // For testing, we would usually run this in a separate process or EXPECT_DEATH.
     // We'll use Google Test's EXPECT_DEATH which forks on POSIX.
     
     EXPECT_DEATH({
+#if defined(_WIN32)
+        ::testing::GTEST_FLAG(catch_exceptions) = false;
+#endif
         domovoy::DomovoyConfig config;
         config.output_dir = ".";
         domovoy::DomovoyCore::Init(config);
@@ -45,4 +51,10 @@ TEST(IntegrationTest, CrashHandler) {
         
         domovoy::DomovoyCore::Shutdown();
     }, "");
+
+#if !defined(_WIN32)
+    nlohmann::json report = FindAndParseReport("domovoy_crash");
+    ASSERT_FALSE(report.is_null()) << "Crash report was not generated!";
+    ASSERT_EQ(report["type"], "crash");
+#endif
 }

@@ -21,8 +21,11 @@
 #include <thread>
 #include <atomic>
 #include <chrono>
+#include "test_utils.h"
 
 TEST(IntegrationTest, HighCpu) {
+    CleanUpOldReports();
+    
     domovoy::DomovoyConfig config;
     config.output_dir = ".";
     // Shorten the allocator capacity to test edge cases if we want, or keep default
@@ -45,6 +48,12 @@ TEST(IntegrationTest, HighCpu) {
 
     domovoy::DomovoyCore::Shutdown();
 
-    // Verify report was generated (for now just running it without crash is success)
+#if !defined(_WIN32)
+    // Verify report was generated (CPU monitor is stubbed on Windows)
+    nlohmann::json report = FindAndParseReport("domovoy_cpu");
+    ASSERT_FALSE(report.is_null()) << "CPU report was not generated!";
+    ASSERT_EQ(report["type"], "cpu_hotspot");
+#endif
+    
     SUCCEED();
 }

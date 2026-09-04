@@ -21,6 +21,7 @@
 #include <vector>
 #include <iostream>
 #include <cpptrace/cpptrace.hpp>
+#include "test_utils.h"
 
 struct BaseClass {
     virtual ~BaseClass() = default;
@@ -31,6 +32,8 @@ struct DerivedLeakClass : public BaseClass {
 };
 
 TEST(IntegrationTest, MemoryLeak) {
+    CleanUpOldReports();
+    
     domovoy::DomovoyConfig config;
     config.output_dir = ".";
     domovoy::DomovoyCore::Init(config);
@@ -41,6 +44,12 @@ TEST(IntegrationTest, MemoryLeak) {
     
     // Shutting down Domovoy should generate a report
     domovoy::DomovoyCore::Shutdown();
+    
+    nlohmann::json report = FindAndParseReport("domovoy_leaks");
+    ASSERT_FALSE(report.is_null()) << "Leak report was not generated!";
+    ASSERT_EQ(report["type"], "memory_leaks");
+    ASSERT_TRUE(report.contains("summary"));
+    ASSERT_GE(report["summary"]["total_leaks"].get<int>(), 1);
     
     SUCCEED();
 }

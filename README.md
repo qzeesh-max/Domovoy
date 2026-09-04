@@ -96,8 +96,8 @@ flowchart TD
     Core["DomovoyCore
     (Singleton lifecycle)"]
 
-    App -->|DomovoyCore::Init(config)| Core
-    App -->|DomovoyCore::Shutdown()| Core
+    App -->|"DomovoyCore::Init(config)"| Core
+    App -->|"DomovoyCore::Shutdown()"| Core
 
     subgraph Subsystems
         Mem["MemoryAnalyzer

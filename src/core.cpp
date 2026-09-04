@@ -23,6 +23,11 @@
 #include "domovoy/crash_handler.h"
 #include <iostream>
 
+#if defined(__linux__)
+extern "C" void domovoy_linux_alloc_hooks_init();
+extern "C" void domovoy_linux_io_hooks_init();
+#endif
+
 namespace domovoy {
 
 Reporter* DomovoyCore::reporter_ = nullptr;
@@ -30,11 +35,13 @@ DomovoyConfig DomovoyCore::config_;
 bool DomovoyCore::initialized_ = false;
 
 void DomovoyCore::Init(const DomovoyConfig& config) {
-    if (initialized_) {
-        return;
-    }
-    
+    if (initialized_) return;
     config_ = config;
+
+#if defined(__linux__)
+    domovoy_linux_alloc_hooks_init();
+    domovoy_linux_io_hooks_init();
+#endif
 
     // 1. Initialize the isolated memory allocator first!
     memory::IsolatedAllocator::GetInstance().Initialize(config.allocator_capacity_bytes);
@@ -87,8 +94,8 @@ void DomovoyCore::Shutdown() {
         reporter_ = nullptr;
     }
 
-    // Shut down isolated allocator
-    memory::IsolatedAllocator::GetInstance().Shutdown();
+    // Disable hooks by resetting config
+    config_ = DomovoyConfig();
     
     initialized_ = false;
 }

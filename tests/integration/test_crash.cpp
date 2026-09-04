@@ -45,6 +45,7 @@ TEST(IntegrationTest, CrashHandler) {
 #endif
         domovoy::DomovoyConfig config;
         config.output_dir = ".";
+    config.enable_crash_handler = true;
         domovoy::DomovoyCore::Init(config);
         
         CauseCrash();

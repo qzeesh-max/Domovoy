@@ -28,6 +28,7 @@ TEST(IntegrationTest, HighCpu) {
     
     domovoy::DomovoyConfig config;
     config.output_dir = ".";
+    config.enable_cpu_profiler = true;
     // Shorten the allocator capacity to test edge cases if we want, or keep default
     domovoy::DomovoyCore::Init(config);
 

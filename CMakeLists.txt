@@ -55,6 +55,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# parallel_hashmap
+FetchContent_Declare(
+    parallel_hashmap
+    GIT_REPOSITORY https://github.com/greg7mdp/parallel-hashmap.git
+    GIT_TAG 1.37
+)
+set(PHMAP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(PHMAP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(parallel_hashmap)
+
 if(WIN32)
     FetchContent_Declare(
         detours
@@ -101,6 +111,7 @@ add_library(domovoy STATIC ${SRC_FILES})
 target_include_directories(domovoy PUBLIC include)
 target_compile_options(domovoy PRIVATE ${DOMOVOY_WARNING_FLAGS})
 target_link_libraries(domovoy PUBLIC Threads::Threads nlohmann_json::nlohmann_json cpptrace::cpptrace)
+target_include_directories(domovoy PUBLIC ${parallel_hashmap_SOURCE_DIR})
 if(WIN32)
     target_link_libraries(domovoy PUBLIC detours)
 endif()

@@ -36,6 +36,7 @@ TEST(IntegrationTest, MemoryLeak) {
     
     domovoy::DomovoyConfig config;
     config.output_dir = ".";
+    config.enable_leak_detection = true;
     domovoy::DomovoyCore::Init(config);
 
     // Intentionally leak a polymorphic object

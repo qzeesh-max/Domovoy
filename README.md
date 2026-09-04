@@ -77,10 +77,9 @@ Domovoy hooks into the process lifecycle at `Init()` and `Shutdown()`, passively
 | Feature | macOS | Linux | Windows |
 |---|---|---|---|
 | **Isolated Allocator** (OS-mapped memory) | ✅ | ✅ | ✅ |
-| **Memory Leak Detection** (heap walk) | ✅ | ❌ | ✅ |
-| **Heap Corruption Detection** | ❌ | ❌ | ❌ |
+| **Memory Leak Detection** (heap walk / malloc hooks) | ✅ | ✅ | ✅ |
 | **CPU Hotspot Profiling** (passive thread) | ✅ | ✅ | ✅ |
-| **IO Leak Detection** (`open`/`socket`/`close`) | ✅ `DYLD_INTERPOSE` | ❌ | ✅ Detours |
+| **IO Leak Detection** (`open`/`socket`/`close`) | ✅ `DYLD_INTERPOSE` | ✅ `dlsym` | ✅ Detours |
 | **Crash Context** (backtrace on fatal signal) | ✅ `sigaction` | ✅ `sigaction` | ✅ VEH |
 | **JSON Reporting** | ✅ | ✅ | ✅ |
 | **Custom Reporter Interface** | ✅ | ✅ | ✅ |
@@ -518,7 +517,6 @@ int main(int argc, char** argv) {
 
     // Feature flags
     config.enable_leak_detection          = true;
-    config.enable_heap_corruption_detection = false; // Not yet implemented
     config.enable_cpu_profiler            = true;
     config.enable_io_monitoring           = true;
     config.enable_crash_handler           = true;
@@ -545,11 +543,8 @@ struct DomovoyConfig {
     // Output directory for JSON reports (must be writable)
     const char* output_dir = ".";
 
-    // Enable BDW-style heap walk to find unreachable allocations
+    // Enable leak detection (heap walk on Win/macOS, malloc hooks on Linux)
     bool enable_leak_detection = true;
-
-    // Enable heap redzone / canary checking (future)
-    bool enable_heap_corruption_detection = false;
 
     // Enable passive background CPU profiling thread
     bool enable_cpu_profiler = true;
@@ -700,8 +695,8 @@ domovoy_crash_1693600000000.json
 
 ### Linux
 
-- **IO interposition**: Currently not supported on Linux.
-- **Heap walk**: Linux `malloc` does not expose a public enumeration API, so heap walking is not supported.
+- **IO interposition**: Uses `dlsym(RTLD_NEXT)` to hook `open`, `open64`, `openat`, `openat64`, `close`, and `socket`.
+- **Memory Tracking**: Since Linux `malloc` does not expose a public enumeration API, Domovoy overrides `malloc`, `calloc`, `realloc`, `memalign`, and `posix_memalign` to track allocations in real-time.
 - **Crash handling**: Identical `sigaltstack` + `sigaction` path as macOS.
 - **Stack traces**: `cpptrace` with `libunwind` or `execinfo` and DWARF symbols.
 
@@ -758,7 +753,7 @@ An STL-compatible adapter, `StlAllocator<T>`, routes all internal `std::unordere
 
 Implements a Boehm-Demers-Weiser-inspired reachability analysis:
 
-1. **Enumerate all heap blocks** using platform-native APIs (`malloc_zone` on macOS, `HeapWalk` on Windows).
+1. **Enumerate all heap blocks** using platform-native APIs (`malloc_zone` on macOS, `HeapWalk` on Windows) or via real-time interception (`dlsym` hooks for `malloc` family on Linux).
 2. **Scan all root regions** — stack, BSS, data segment — for pointer-sized values.
 3. Any heap block whose address does not appear anywhere in the root scan is reported as a **potential leak**.
 4. **Extract exact C++ types** for leaked objects containing a virtual method table (vtable). This is done safely without triggering access violations:
@@ -791,7 +786,7 @@ Intercepts file descriptor lifecycle calls:
 | Platform | Mechanism | Intercepted calls |
 |---|---|---|
 | macOS | `DYLD_INTERPOSE` | `open`, `open64`, `close`, `socket` |
-| Linux | Not supported | N/A |
+| Linux | `dlsym(RTLD_NEXT)` | `open`, `open64`, `openat`, `openat64`, `close`, `socket` |
 | Windows | Microsoft Detours | `CreateFileA`, `CreateFileW`, `CloseHandle` |
 
 On `Shutdown()`, any FD still present in the tracking map (not yet `close()`d) is reported as an IO leak, along with its path and whether it is a socket.

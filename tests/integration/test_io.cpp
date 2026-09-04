@@ -31,6 +31,7 @@ TEST(IntegrationTest, IoLeak) {
     
     domovoy::DomovoyConfig config;
     config.output_dir = ".";
+    config.enable_io_monitoring = true;
     // Enable IO monitoring in our test config
     // Actually, IO monitoring is enabled by default in DomovoyConfig
     domovoy::DomovoyCore::Init(config);

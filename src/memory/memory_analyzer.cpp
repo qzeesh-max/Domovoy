@@ -24,6 +24,14 @@
 #include <cstdio>
 #include <cctype>
 
+#if defined(__linux__)
+namespace domovoy {
+namespace memory {
+    void GetLinuxTrackedAllocations(AllocationList& out_list);
+}
+}
+#endif
+
 #include <cpptrace/cpptrace.hpp>
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -125,8 +133,10 @@ void MemoryAnalyzer::EnumerateHeap(AllocationList& allocations) {
             HeapUnlock(heap);
         }
     }
+#elif defined(__linux__)
+    GetLinuxTrackedAllocations(allocations);
 #else
-    // Stub for Linux. Reliable enumeration requires intercepting malloc.
+    // Unsupported platform
 #endif
 }
 

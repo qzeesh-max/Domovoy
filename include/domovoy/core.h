@@ -28,11 +28,11 @@ struct DomovoyConfig {
     size_t allocator_capacity_bytes = 2 * 1024 * 1024;
     
     // Feature flags
-    bool enable_leak_detection = true;
+    bool enable_leak_detection = false;
     bool enable_heap_corruption_detection = false;
-    bool enable_cpu_profiler = true;
-    bool enable_io_monitoring = true;
-    bool enable_crash_handler = true;
+    bool enable_cpu_profiler = false;
+    bool enable_io_monitoring = false;
+    bool enable_crash_handler = false;
 
     bool enable_leak_report_summary = true;
     bool enable_leak_report_details = true;

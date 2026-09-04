@@ -118,6 +118,7 @@ void IoMonitor::OnClose(int fd) {
 }
 
 void IoMonitor::OnSocket(int fd, int domain, int type, int protocol) {
+    (void)domain; (void)type; (void)protocol;
     if (!enabled_ || fd < 0) return;
     std::lock_guard<std::mutex> lock(mutex_);
     FdInfo info;

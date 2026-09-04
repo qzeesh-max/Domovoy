@@ -29,6 +29,15 @@
 #elif defined(_WIN32)
 #include <windows.h>
 #include <tlhelp32.h>
+#elif defined(__linux__)
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <fstream>
+#include <sstream>
+#include <string>
 #endif
 
 namespace domovoy {
@@ -150,6 +159,66 @@ void CpuMonitor::CheckThreadsForHighCpu() {
         } while (Thread32Next(hThreadSnap, &te32));
     }
     CloseHandle(hThreadSnap);
+#elif defined(__linux__)
+    DIR* dir = opendir("/proc/self/task");
+    if (!dir) return;
+
+    long clk_tck = sysconf(_SC_CLK_TCK);
+    if (clk_tck <= 0) clk_tck = 100; // fallback
+
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+        if (entry->d_name[0] == '.') continue;
+        
+        uint64_t thread_id = 0;
+        try {
+            thread_id = std::stoull(entry->d_name);
+        } catch (...) {
+            continue;
+        }
+        
+        std::string stat_path = std::string("/proc/self/task/") + entry->d_name + "/stat";
+        std::ifstream stat_file(stat_path);
+        if (!stat_file.is_open()) continue;
+        
+        std::string line;
+        if (!std::getline(stat_file, line)) continue;
+        
+        // Comm field is in parentheses, so we skip past the last ')' to parse fields reliably
+        size_t rparen = line.find_last_of(')');
+        if (rparen == std::string::npos || rparen + 2 >= line.size()) continue;
+        
+        std::istringstream iss(line.substr(rparen + 2));
+        std::string state;
+        long ppid, pgrp, session, tty_nr, tpgid;
+        unsigned long flags, minflt, cminflt, majflt, cmajflt;
+        unsigned long utime, stime;
+        
+        if (iss >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags 
+                >> minflt >> cminflt >> majflt >> cmajflt >> utime >> stime) {
+            
+            uint64_t cpu_time = ((utime + stime) * 1000000000ULL) / clk_tck;
+            auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+
+            auto it = thread_states_.find(thread_id);
+            if (it != thread_states_.end()) {
+                uint64_t cpu_delta = cpu_time - it->second.last_cpu_time_ns;
+                uint64_t time_delta = now - it->second.last_check_time_ns;
+
+                if (time_delta > 0) {
+                    double cpu_usage = static_cast<double>(cpu_delta) / static_cast<double>(time_delta);
+                    if (cpu_usage > 0.90) {
+                        CaptureBacktraceForThread(thread_id);
+                    }
+                }
+                it->second.last_cpu_time_ns = cpu_time;
+                it->second.last_check_time_ns = now;
+            } else {
+                thread_states_[thread_id] = {cpu_time, static_cast<uint64_t>(now)};
+            }
+        }
+    }
+    closedir(dir);
 #endif
 }
 

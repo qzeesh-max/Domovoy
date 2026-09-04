@@ -88,37 +88,49 @@ Domovoy hooks into the process lifecycle at `Init()` and `Shutdown()`, passively
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    Your Application                       │
-│                                                          │
-│   DomovoyCore::Init(config)  ←  explicit, user-driven   │
-│   DomovoyCore::Shutdown()    ←  explicit, user-driven   │
-└────────────────────┬─────────────────────────────────────┘
-                     │
-          ┌──────────▼──────────┐
-          │     DomovoyCore     │  Singleton lifecycle
-          └──────────┬──────────┘
-                     │
-        ┌────────────┼─────────────────┐──────────────┐
-        ▼            ▼                 ▼              ▼
-  ┌───────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐
-  │MemoryAnal-│ │CpuMonitor│ │  IoMonitor   │ │CrashHandler  │
-  │yzer       │ │(bg thread)│ │(interposition│ │(alt-stack /  │
-  │(heap walk)│ │           │ │ hooks)       │ │ VEH)         │
-  └─────┬─────┘ └─────┬────┘ └──────┬───────┘ └──────┬───────┘
-        │             │             │                 │
-        └─────────────┴─────────────┴─────────────────┘
-                                   │
-                          ┌────────▼────────┐
-                          │   Reporter       │  Interface
-                          │  (JsonFileRep.)  │
-                          └────────┬────────┘
-                                   │
-                          ┌────────▼────────┐
-                          │  IsolatedAlloc. │  mmap / VirtualAlloc
-                          │  (OS memory)    │  never touches app heap
-                          └─────────────────┘
+```mermaid
+flowchart TD
+    App["Your Application
+    (Explicit calls to Init/Shutdown)"]
+
+    Core["DomovoyCore
+    (Singleton lifecycle)"]
+
+    App -->|DomovoyCore::Init(config)| Core
+    App -->|DomovoyCore::Shutdown()| Core
+
+    subgraph Subsystems
+        Mem["MemoryAnalyzer
+        (Heap walk / malloc hooks)"]
+        Cpu["CpuMonitor
+        (Background thread)"]
+        Io["IoMonitor
+        (Interposition hooks)"]
+        Crash["CrashHandler
+        (alt-stack / VEH)"]
+    end
+
+    Core --> Mem
+    Core --> Cpu
+    Core --> Io
+    Core --> Crash
+
+    Reporter["Reporter
+    (JsonFileReporter)"]
+
+    Mem --> Reporter
+    Cpu --> Reporter
+    Io --> Reporter
+    Crash --> Reporter
+
+    Alloc["IsolatedAllocator
+    (OS memory - never touches app heap)"]
+
+    Reporter --> Alloc
+    Mem -.-> Alloc
+    Cpu -.-> Alloc
+    Io -.-> Alloc
+    Crash -.-> Alloc
 ```
 
 All internal data structures — strings, maps, JSON nodes — allocate through `IsolatedAllocator`, which uses raw OS pages separate from the application's heap. This ensures Domovoy remains functional even when the application's heap is corrupted.
